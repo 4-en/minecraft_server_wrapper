@@ -93,7 +93,6 @@ class KVConfig:
                 if key.startswith("_"):
                     continue
                 
-                print(f"key={key}, value={value}")
                 # if value is callable, call it
                 if callable(value):
                     value = value()

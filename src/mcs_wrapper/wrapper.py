@@ -8,8 +8,7 @@ import re
 import datetime
 import argparse
 from utils.config import KVConfig, get_data_root
-from dataclasses import dataclass, field
-
+from dataclasses import dataclass
 
 CONFIG_FILE = "wrapper.cfg"
 
@@ -23,8 +22,6 @@ class WrapperConfig(KVConfig):
     comment3: str = "# Comments start with #"
     commentTimestamp: callable = lambda: "# Last updated: " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     comment4: str = "#"
-    comment5: str = "# Wrapper settings"
-    comment6: str = "#"
     comment7: str = "# server_version: current server version"
     server_version: str = "0.0"
     comment8: str = "# auto_update: automatically update server"
@@ -33,7 +30,13 @@ class WrapperConfig(KVConfig):
     use_snapshot: bool = False
     comment10: str = "# auto_restart: automatically restart server when it closes without \"stop\" command"
     auto_restart: bool = True
-    comment11: str = "# use_webhook: True to use webhook"
+    comment101: str = "# restart_delay: delay in seconds before restarting server"
+    restart_delay: int = 5
+    comment102: str = "# restart_attempts: number of restart attempts before giving up"
+    restart_attempts: int = 5
+    comment103: str = "# scheduled_restart: interval in hours to restart server"
+    scheduled_restart: float = 0.0
+    comment11: str = "# use_webhook: True to use discord webhook"
     use_webhook: bool = False
 
 
@@ -43,20 +46,124 @@ class Wrapper:
         self.directory = directory
         self._load_config()
 
-    def _load_config(self):
-        directory = self.directory # directory of server
-        data_root = get_data_root() # data root directory
+        self.running = False
+        self._server_running = False
+        self._process = None
+        self._stdout = None
+        self._stdin = None
+        self._stdout_thread = None
+        self._stdin_thread = None
 
-        full_directory = os.path.join(data_root, directory)
+    def _load_config(self):
+        directory = self.directory  # directory of server
+        data_root = get_data_root()  # data root directory
+
+        self.full_directory = os.path.join(data_root, directory)
 
         # ensure that directory exists
-        if not os.path.exists(full_directory):
-            os.makedirs(full_directory)
+        if not os.path.exists(self.full_directory):
+            os.makedirs(self.full_directory)
 
         self.config = WrapperConfig()
-        self.config.set_path(os.path.join(full_directory, CONFIG_FILE))
+        self.config.set_path(os.path.join(self.full_directory, CONFIG_FILE))
         self.config.load_config()
         self.config.save_config()
+
+    def _get_start_command(self):
+        return ["java", "-Xmx4096M", "-Xms1024M", "-jar", "server.jar", "nogui"]
+
+    def _read_stdout(self):
+        while self._server_running:
+            line = self._stdout.readline()
+            if line:
+                print(line, end="")
+                # Simulated process_line
+                # self._process_line(line)
+        print("stdout thread stopped")
+
+    def _read_stdin(self):
+        print("Type 'stop' to stop the server")
+        while self.running:
+            try:
+                input_str = input()
+                if input_str and self._server_running and self._stdin and self._stdin.writable():
+                    self._stdin.write(input_str + "\n")
+                    self._stdin.flush()
+            except EOFError:
+                return
+
+    def _accept_eula(self):
+        eula_file = os.path.join(self.full_directory, "eula.txt")
+        with open(eula_file, "w") as f:
+            f.write("#By changing the setting below to TRUE you are indicating your agreement to our EULA (https://aka.ms/MinecraftEULA)." + "\n")
+            f.write("#Thu Jan 01 00:00:00 UTC 1970" + "\n")
+            f.write("eula=true\n")
+
+    def _run_server(self):
+        print("Starting server...")
+        command = self._get_start_command()
+
+        if self._process is not None:
+            self._stop_threads()
+            self._stdout_thread.join()
+
+        # Here, subprocess.Popen creates new pipes for stdin, stdout, stderr
+        self._process = subprocess.Popen(
+            command, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, 
+            stdin=subprocess.PIPE, 
+            text=True,
+            bufsize=1, 
+            cwd=self.full_directory
+        )
+
+        self._stdin = self._process.stdin
+        self._stdout = self._process.stdout
+        self._stderr = self._process.stderr
+
+        print("Server process started...")
+        self._server_running = True
+
+        self._stdout_thread = threading.Thread(target=self._read_stdout, daemon=True)
+        self._stdout_thread.start()
+        print("Server listener started...")
+
+        self._process.wait()
+        self._server_running = False
+        self._stop_threads()
+        print("Server closed")
+
+        print("Waiting for threads to finish...")
+        self._stdout_thread.join()
+        self._stdin = None
+        self._stdout = None
+        print("Server fully stopped")
+
+    def _stop_threads(self):
+        self._server_running = False
+        
+        # close pipes
+        if self._stdin:
+            self._stdin.close()
+        if self._stdout:
+            self._stdout.close()
+
+
+    def run(self):
+        if self.running:
+            return
+
+        self.running = True
+
+        self._stdin_thread = threading.Thread(target=self._read_stdin, daemon=True, name="stdin_thread")
+        self._stdin_thread.start()
+
+        self._accept_eula() # TODO: actually ask user to accept eula
+        while self.running:
+            self._run_server()
+
+        print("Shutting down...")
 
 
 def main():
@@ -65,6 +172,7 @@ def main():
     args = parser.parse_args()
 
     wrapper = Wrapper(args.directory)
+    wrapper.run()
 
 if __name__ == "__main__":
     main()
