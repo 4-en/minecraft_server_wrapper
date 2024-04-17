@@ -1,7 +1,20 @@
+import os
+
+# get data root directory
+def get_data_root():
+    if os.name == "nt":
+        return os.path.join(os.getenv("APPDATA"), "mcs_wrapper")
+    else:
+        return os.path.join(os.getenv("HOME"), ".mcs_wrapper")
+
 
 class KVConfig:
-    def __init__(self, path):
+
+    def set_path(self, path):
         self._path = path
+
+    def get_path(self):
+        return self._path
 
     def _get_value_type(self, key, value):
         # check if key is already defined in this class
@@ -51,7 +64,7 @@ class KVConfig:
         
         return key, value
     
-    def _parse_file(self):
+    def _parse_file(self, path):
         # read file and parse lines
         with open(self._path, "r") as f:
             lines = f.readlines()
@@ -67,13 +80,20 @@ class KVConfig:
 
         return config
     
-    def save_config(self, config):
-        with open(self._path, "w") as f:
+    def save_config(self, config=None, path=None):
+        if config is None:
+            config = self.__dict__
+
+        if path is None:
+            path = self._path
+
+        with open(path, "w") as f:
             for key, value in config.items():
                 # skip keys that start with underscore
                 if key.startswith("_"):
                     continue
-
+                
+                print(f"key={key}, value={value}")
                 # if value is callable, call it
                 if callable(value):
                     value = value()
@@ -85,7 +105,17 @@ class KVConfig:
 
                 f.write(f"{key} = {value}\n")
 
-    def load_config(self):
-        config = self._parse_file()
+    def load_config(self, path=None):
+
+        if path is None:
+            path = self._path
+
+        # check if file exists
+        if not os.path.exists(path):
+            print(f"Config file {self.path} does not exist. Using default values.")
+            return
+
+        config = self._parse_file(path)
         for key, value in config.items():
-            setattr(self, key, value)
+            if hasattr(self, key):
+                setattr(self, key, value)
