@@ -8,6 +8,7 @@ import re
 import datetime
 import argparse
 from utils.config import KVConfig, get_data_root
+from components.updater import get_last_version, download_server_jar
 from dataclasses import dataclass
 
 CONFIG_FILE = "wrapper.cfg"
@@ -99,6 +100,34 @@ class Wrapper:
             f.write("#Thu Jan 01 00:00:00 UTC 1970" + "\n")
             f.write("eula=true\n")
 
+    def _update_server(self) -> bool:
+        version = self.config.server_version
+        snapshot = self.config.use_snapshot
+        directory = self.full_directory
+        auto_update = self.config.auto_update
+
+        # check if server.jar exists
+        server_jar = os.path.join(directory, "server.jar")
+        if not os.path.exists(server_jar):
+            auto_update = True
+
+        if not auto_update:
+            return True
+        
+        # get latest version
+        latest_version = get_last_version(snapshot)
+        if latest_version == version:
+            return True
+        
+        # download server jar
+        if download_server_jar(latest_version, directory):
+            self.config.server_version = latest_version
+            self.config.save_config()
+            return True
+        
+        return False
+
+
     def _run_server(self):
         print("Starting server...")
         command = self._get_start_command()
@@ -156,6 +185,9 @@ class Wrapper:
 
         self.running = True
 
+        # update server
+        self._update_server()
+
         self._stdin_thread = threading.Thread(target=self._read_stdin, daemon=True, name="stdin_thread")
         self._stdin_thread.start()
 
@@ -163,6 +195,9 @@ class Wrapper:
         while self.running:
             self._run_server()
 
+
+        # save config
+        self.config.save_config()
         print("Shutting down...")
 
 
