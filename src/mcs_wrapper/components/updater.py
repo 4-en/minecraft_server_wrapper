@@ -1,5 +1,6 @@
 import requests
 import json
+import difflib
 
 VERSIONS_URL = "https://launchermeta.mojang.com/mc/game/version_manifest.json"
 
@@ -11,6 +12,27 @@ def get_last_version(snapshot=False):
         return versions["latest"]["snapshot"]
     else:
         return versions["latest"]["release"]
+    
+def find_version(version, snapshot=False):
+
+    if version.lower() == "latest":
+        return get_last_version(snapshot)
+
+    response = requests.get(VERSIONS_URL)
+    versions = json.loads(response.text)
+
+    
+    version_list = versions["versions"]
+    for v in version_list:
+        if v["id"] == version:
+            return True
+    
+    # not version found so far, try to find similar version
+    matches = difflib.get_close_matches(version, [v["id"] for v in version_list])
+    if len(matches) > 0:
+        return matches[0]
+    else:
+        return None
     
 def download_server_jar(version, directory) -> bool:
     response = requests.get(VERSIONS_URL)

@@ -8,7 +8,7 @@ import re
 import datetime
 import argparse
 from utils.config import KVConfig, get_data_root
-from components.updater import get_last_version, download_server_jar
+from components.updater import get_last_version, download_server_jar, find_version
 from dataclasses import dataclass
 
 CONFIG_FILE = "wrapper.cfg"
@@ -25,6 +25,8 @@ class WrapperConfig(KVConfig):
     comment4: str = "#"
     comment7: str = "# server_version: current server version"
     server_version: str = "0.0"
+    comment77: str = "# preferred_version: preferred server version"
+    preferred_version: str = "latest"
     comment8: str = "# auto_update: automatically update server"
     auto_update: bool = False
     comment9: str = "# use_snapshot: True to use snapshot server"
@@ -105,23 +107,44 @@ class Wrapper:
         snapshot = self.config.use_snapshot
         directory = self.full_directory
         auto_update = self.config.auto_update
+        preferred_version = self.config.preferred_version
 
         # check if server.jar exists
         server_jar = os.path.join(directory, "server.jar")
-        if not os.path.exists(server_jar):
+        jar_exists = os.path.exists(server_jar)
+        
+        # if no server.jar, update no matter what
+        if not jar_exists:
             auto_update = True
 
         if not auto_update:
             return True
         
-        # get latest version
-        latest_version = get_last_version(snapshot)
-        if latest_version == version:
+        # check if preferred version same as version
+        if jar_exists:
+            if version == preferred_version:
+                return True
+            
+        # try to get version
+        use_version = find_version(preferred_version, snapshot)
+
+        if use_version and use_version != preferred_version:
+            # probably a typo, change preferred version to use_version
+            self.config.preferred_version = use_version
+
+        # if no version found and no server.jar, use latest version
+        if use_version is None and not jar_exists:
+            use_version = get_last_version(snapshot)
+        elif use_version is None:
+            return True
+        
+        
+        if use_version == version:
             return True
         
         # download server jar
-        if download_server_jar(latest_version, directory):
-            self.config.server_version = latest_version
+        if download_server_jar(use_version, directory):
+            self.config.server_version = use_version
             self.config.save_config()
             return True
         

@@ -102,7 +102,7 @@ class KVConfig:
                     f.write(f"{value}\n")
                     continue
 
-                f.write(f"{key} = {value}\n")
+                f.write(f"{key}={value}\n")
 
     def load_config(self, path=None):
 
