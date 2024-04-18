@@ -71,15 +71,35 @@ class Wrapper(AbstractWrapper):
         directory = self.directory  # directory of server
         data_root = get_data_root()  # data root directory
 
+
         self.full_directory = os.path.join(data_root, directory)
 
         # ensure that directory exists
         if not os.path.exists(self.full_directory):
             os.makedirs(self.full_directory)
 
+        # load default config
+        def_config_name = os.path.join(data_root, "default.cfg")
+        if not os.path.exists(def_config_name):
+            def_config = WrapperConfig()
+            def_config.set_path(def_config_name)
+            def_config.save_config(def_config_name)
+        else:
+            def_config = WrapperConfig()
+            def_config.set_path(def_config_name)
+            def_config.load_config()
+
         self.config = WrapperConfig()
         self.config.set_path(os.path.join(self.full_directory, CONFIG_FILE))
-        self.config.load_config()
+
+        # check if config exists
+        if not os.path.exists(self.config.get_path()):
+            # copy default config to server directory
+            self.config = def_config
+            self.config.set_path(os.path.join(self.full_directory, CONFIG_FILE))
+        else:
+            self.config.load_config()
+
         self.config.save_config()
 
     def _get_start_command(self):
