@@ -11,6 +11,7 @@ from utils.config import KVConfig, get_data_root
 from extensions.updater import get_last_version, download_server_jar, find_version
 from extensions.listener import Listener, AbstractWrapper, Message
 from dataclasses import dataclass
+from utils.server_parser import player_message
 
 CONFIG_FILE = "wrapper.cfg"
 
@@ -83,11 +84,12 @@ class Wrapper(AbstractWrapper):
         if not os.path.exists(def_config_name):
             def_config = WrapperConfig()
             def_config.set_path(def_config_name)
-            def_config.save_config(def_config_name)
         else:
             def_config = WrapperConfig()
             def_config.set_path(def_config_name)
             def_config.load_config()
+
+        def_config.save_config()
 
         self.config = WrapperConfig()
         self.config.set_path(os.path.join(self.full_directory, CONFIG_FILE))
@@ -120,6 +122,14 @@ class Wrapper(AbstractWrapper):
             line = None
 
         message = Message(self._next_message_id, line, line_raw)
+
+        # check if it was a player message
+        if line is not None:
+            pm = player_message(line)
+            if pm:
+                message.author = pm[0]
+                message.user_message = pm[1]
+
         self._next_message_id += 1
 
         for listener in self._listeners:
@@ -316,6 +326,9 @@ class ListenerTester(Listener):
     def handle_message(self, message: Message) -> None:
         if "ping" in message.content:
             self.wrapper.send_command("say pong")
+
+        if message.is_user_message():
+            self.wrapper.send_command(f"say Hello, {message.author}!")
 
 def main():
     parser = argparse.ArgumentParser(description="Wrapper for Minecraft server")
