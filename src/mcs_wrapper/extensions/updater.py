@@ -25,7 +25,7 @@ def find_version(version, snapshot=False):
     version_list = versions["versions"]
     for v in version_list:
         if v["id"] == version:
-            return True
+            return version
     
     # not version found so far, try to find similar version
     matches = difflib.get_close_matches(version, [v["id"] for v in version_list])

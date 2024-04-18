@@ -194,10 +194,14 @@ class Wrapper(AbstractWrapper):
             return True
         
         # download server jar
+        print(f"Downloading server.jar for version {use_version}")
         if download_server_jar(use_version, directory):
+            print(f"Downloaded server.jar for version {use_version}")
             self.config.server_version = use_version
             self.config.save_config()
             return True
+        else:    
+            print(f"Failed to download server.jar for version {use_version}")
         
         return False
 
@@ -288,12 +292,18 @@ class Wrapper(AbstractWrapper):
         print("Shutting down...")
 
 
+class ListenerTester(Listener):
+    def handle_message(self, message: Message) -> None:
+        if "ping" in message.content:
+            self.wrapper.send_command("say pong")
+
 def main():
     parser = argparse.ArgumentParser(description="Wrapper for Minecraft server")
     parser.add_argument("--directory", "-d", help="Server directory", default="default")
     args = parser.parse_args()
 
     wrapper = Wrapper(args.directory)
+    wrapper.add_listener(ListenerTester(wrapper))
     wrapper.run()
 
 if __name__ == "__main__":
