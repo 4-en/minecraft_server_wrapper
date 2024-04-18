@@ -8,7 +8,8 @@ import re
 import datetime
 import argparse
 from utils.config import KVConfig, get_data_root
-from components.updater import get_last_version, download_server_jar, find_version
+from extensions.updater import get_last_version, download_server_jar, find_version
+from extensions.listener import Listener, AbstractWrapper, Message
 from dataclasses import dataclass
 
 CONFIG_FILE = "wrapper.cfg"
@@ -43,10 +44,10 @@ class WrapperConfig(KVConfig):
     use_webhook: bool = False
 
 
-class Wrapper:
+class Wrapper(AbstractWrapper):
 
     def __init__(self, directory="default"):
-        self.directory = directory
+        self.directory: str = directory
         self._load_config()
 
         self.running = False
@@ -56,6 +57,15 @@ class Wrapper:
         self._stdin = None
         self._stdout_thread = None
         self._stdin_thread = None
+
+        self._listeners: list[Listener] = []
+        self._next_message_id = 0
+
+    def add_listener(self, listener: Listener):
+        self._listeners.append(listener)
+
+    def remove_listener(self, listener: Listener):
+        self._listeners.remove(listener)
 
     def _load_config(self):
         directory = self.directory  # directory of server
@@ -74,15 +84,45 @@ class Wrapper:
 
     def _get_start_command(self):
         return ["java", "-Xmx4096M", "-Xms1024M", "-jar", "server.jar", "nogui"]
+    
+    def _handle_line(self, line):
+        print(line)
+
+        line_raw = line
+
+        # remove time and server thread info prefix: eg. [22:58:59] [Server thread/INFO]:
+        line_start = line.find("] ") + 2
+        line_start = line.find("]: ", line_start) + 3
+
+        if line_start != -1:
+            line = line[line_start:]
+        else:
+            line = None
+
+        message = Message(self._next_message_id, line, line_raw)
+        self._next_message_id += 1
+
+        for listener in self._listeners:
+            listener.handle_message(message)
+
 
     def _read_stdout(self):
         while self._server_running:
             line = self._stdout.readline()
             if line:
-                print(line, end="")
-                # Simulated process_line
-                # self._process_line(line)
+                line = line.strip()
+                self._handle_line(line)
+
         print("stdout thread stopped")
+
+    def send_command(self, command: str):
+        if self._stdin and self._stdin.writable():
+            self._stdin.write(command + "\n")
+            self._stdin.flush()
+
+    def stop(self):
+        self.running = False
+        self.send_command("stop")
 
     def _read_stdin(self):
         print("Type 'stop' to stop the server")
@@ -92,6 +132,12 @@ class Wrapper:
                 if input_str and self._server_running and self._stdin and self._stdin.writable():
                     self._stdin.write(input_str + "\n")
                     self._stdin.flush()
+
+                    # special case:
+                    # if input_str is "stop", stop server even if auto_restart is True
+                    if input_str.lower() == "stop":
+                        self.running = False
+
             except EOFError:
                 return
 
@@ -101,6 +147,11 @@ class Wrapper:
             f.write("#By changing the setting below to TRUE you are indicating your agreement to our EULA (https://aka.ms/MinecraftEULA)." + "\n")
             f.write("#Thu Jan 01 00:00:00 UTC 1970" + "\n")
             f.write("eula=true\n")
+
+    def _load_builtin_extensions(self):
+        # load built-in extensions
+        pass
+
 
     def _update_server(self) -> bool:
         version = self.config.server_version
@@ -138,7 +189,7 @@ class Wrapper:
         elif use_version is None:
             return True
         
-        
+
         if use_version == version:
             return True
         
@@ -150,6 +201,14 @@ class Wrapper:
         
         return False
 
+
+    def _server_stopped(self):
+        # when the server stops, decide whether to restart it
+        # if not, set running to False
+        if self.config.auto_restart and self.running:
+            print("Restarting server...")
+        else:
+            self.running = False
 
     def _run_server(self):
         print("Starting server...")
@@ -174,23 +233,21 @@ class Wrapper:
         self._stdout = self._process.stdout
         self._stderr = self._process.stderr
 
-        print("Server process started...")
         self._server_running = True
 
         self._stdout_thread = threading.Thread(target=self._read_stdout, daemon=True)
         self._stdout_thread.start()
-        print("Server listener started...")
 
         self._process.wait()
         self._server_running = False
         self._stop_threads()
         print("Server closed")
 
-        print("Waiting for threads to finish...")
         self._stdout_thread.join()
         self._stdin = None
         self._stdout = None
-        print("Server fully stopped")
+
+        self._server_stopped()
 
     def _stop_threads(self):
         self._server_running = False
@@ -209,7 +266,14 @@ class Wrapper:
         self.running = True
 
         # update server
-        self._update_server()
+        ready_to_start = self._update_server()
+        if not ready_to_start:
+            print("Failed to acquire server.jar")
+            self.running = False
+            return
+        
+        # load built-in extensions
+        self._load_builtin_extensions()
 
         self._stdin_thread = threading.Thread(target=self._read_stdin, daemon=True, name="stdin_thread")
         self._stdin_thread.start()
