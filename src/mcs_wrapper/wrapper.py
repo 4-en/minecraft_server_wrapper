@@ -4,6 +4,7 @@
 import os
 import subprocess
 import threading
+import time
 import re
 import datetime
 import argparse
@@ -11,7 +12,7 @@ from utils.config import KVConfig, get_data_root
 from extensions.updater import get_last_version, download_server_jar, find_version
 from extensions.listener import Listener, AbstractWrapper, Message
 from dataclasses import dataclass
-from utils.server_parser import player_message
+from utils.server_parser import player_message, is_server_ready
 from utils.cyclic_list import CyclicList
 
 CONFIG_FILE = "wrapper.cfg"
@@ -67,12 +68,35 @@ class Wrapper(AbstractWrapper):
         self.messages = CyclicList(100)
         self.player_messages = CyclicList(100)
 
+        self._restart_scheduler = None
+        self._running_lock = threading.Lock()
+        self._server_ready_lock = threading.Lock()
+        self._server_ready_lock_acquired = False
+
 
     def add_listener(self, listener: Listener):
         self._listeners.append(listener)
 
     def remove_listener(self, listener: Listener):
         self._listeners.remove(listener)
+
+    def sleep(self, seconds: float):
+        if not self._server_running:
+            raise Exception("You can't sleep using this method when the server is not running")
+
+        finished_sleeping = False
+        finished_sleeping = not self._running_lock.acquire(blocking=True, timeout=seconds)
+        if not finished_sleeping:
+            self._running_lock.release()
+        return finished_sleeping
+    
+    def wait_for_server_ready(self):
+        if not self._server_running:
+            raise Exception("You can't wait for server ready when the server is not running")
+
+        self._server_ready_lock.acquire()
+        # if we can acquire the lock, it means the server is ready
+        self._server_ready_lock.release()
 
     def _load_config(self):
         directory = self.directory  # directory of server
@@ -124,6 +148,9 @@ class Wrapper(AbstractWrapper):
 
         if line_start != -1:
             line = line[line_start:]
+            if self._server_ready_lock_acquired and is_server_ready(line):
+                self._server_ready_lock.release()
+                self._server_ready_lock_acquired = False
         else:
             line = None
 
@@ -253,13 +280,73 @@ class Wrapper(AbstractWrapper):
         else:
             self.running = False
 
+    def _start_restart_scheduler(self):
+        interval = self.config.scheduled_restart
+
+        if interval <= 0:
+            return
+        
+
+        warnings = [10, 20, 30, 60, 5*60]
+
+        warnings = sorted(warnings, reverse=True)
+        def sec_to_hms_str(seconds):
+            hours = seconds // 3600
+            minutes = (seconds % 3600) // 60
+            seconds = seconds % 60
+            if hours > 0:
+                return f"{hours}h {minutes}m {seconds}s"
+            elif minutes > 0:
+                return f"{minutes}m {seconds}s"
+            else:
+                return f"{seconds}s"
+
+        def scheduler_task():
+            seconds_until_restart = interval * 3600
+            self.wait_for_server_ready()
+            while self._server_running and seconds_until_restart > 0:
+                next_warning = 0
+                warning_index = 0
+                while warning_index < len(warnings):
+                    if warnings[warning_index] < seconds_until_restart:
+                        next_warning = warnings[warning_index]
+                        break
+                    warning_index += 1
+                
+                if next_warning == 0:
+                    warning_index = -1
+
+                sleep_time = seconds_until_restart - next_warning
+                if sleep_time > 0:
+                    sleep_completed = self.sleep(sleep_time)
+                    if sleep_completed:
+                        seconds_until_restart -= sleep_time
+                    else:
+                        return
+                    
+                if seconds_until_restart <= 1:
+                    self.send_command("say Server is restarting...")
+                    self.send_command("stop")
+                    return
+                    
+                if warning_index > -1 and warning_index < len(warnings):
+                    self.send_command(f"say Server will restart in {sec_to_hms_str(seconds_until_restart)}")
+
+
+        self._restart_scheduler = threading.Thread(target=scheduler_task, daemon=True, name="restart_scheduler")
+        self._restart_scheduler.start()
+
     def _run_server(self):
         print("Starting server...")
         command = self._get_start_command()
 
         if self._process is not None:
-            self._stop_threads()
+            self._clean_server_services()
             self._stdout_thread.join()
+
+        # aquire lock
+        lock_aquired = self._running_lock.acquire()
+        self._server_ready_lock_acquired = self._server_ready_lock.acquire()
 
         # Here, subprocess.Popen creates new pipes for stdin, stdout, stderr
         self._process = subprocess.Popen(
@@ -281,25 +368,35 @@ class Wrapper(AbstractWrapper):
         self._stdout_thread = threading.Thread(target=self._read_stdout, daemon=True)
         self._stdout_thread.start()
 
+        if self.config.scheduled_restart > 0:
+            self._start_restart_scheduler()
+
         self._process.wait()
         self._server_running = False
-        self._stop_threads()
+        if lock_aquired:
+            self._running_lock.release()
+        self._clean_server_services()
         print("Server closed")
 
-        self._stdout_thread.join()
-        self._stdin = None
-        self._stdout = None
 
         self._server_stopped()
 
-    def _stop_threads(self):
+    def _clean_server_services(self):
         self._server_running = False
-        
         # close pipes
         if self._stdin:
             self._stdin.close()
         if self._stdout:
             self._stdout.close()
+
+        self._stdout_thread.join()
+        self._stdin = None
+        self._stdout = None
+
+        # wait for restart scheduler
+        if self._restart_scheduler:
+            self._restart_scheduler.join()
+            self._restart_scheduler = None
 
 
     def run(self):
