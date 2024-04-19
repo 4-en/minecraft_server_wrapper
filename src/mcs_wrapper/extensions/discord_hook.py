@@ -38,6 +38,8 @@ class DiscordHook(Logger):
         self.log_server_stop = self.config.log_server_stop
 
         self.enabled = self.config.webhook_url != "None"
+        if not self.enabled:
+            print("Discord hook is disabled. No webhook URL provided.")
         self.fails = 0
 
     def send_server_start(self):

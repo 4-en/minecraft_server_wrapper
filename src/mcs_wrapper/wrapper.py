@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from utils.server_parser import player_message, is_server_ready
 from utils.cyclic_list import CyclicList
 from extensions.discord_hook import DiscordHook
+from extensions.herobrine import Herobrine
 
 CONFIG_FILE = "wrapper.cfg"
 
@@ -46,6 +47,7 @@ class WrapperConfig(KVConfig):
     scheduled_restart: float = 0.0
     comment11: str = "# use_webhook: True to use discord webhook"
     use_webhook: bool = False
+    use_herobrine: bool = False
 
 
 class Wrapper(AbstractWrapper):
@@ -67,7 +69,8 @@ class Wrapper(AbstractWrapper):
 
         self.raw_messages = CyclicList(100)
         self.messages = CyclicList(100)
-        self.player_messages = CyclicList(100)
+        #self.player_messages = CyclicList(100)
+        self.player_messages = []
 
         self._restart_scheduler = None
         self._running_lock = threading.Lock()
@@ -192,6 +195,16 @@ class Wrapper(AbstractWrapper):
             self._stdin.write(command + "\n")
             self._stdin.flush()
 
+    def get_chat_history(self, n=10) -> list[Message]:
+        n = min(n, len(self.player_messages))
+        if n == 0:
+            return []
+        
+        
+        return self.player_messages[-n:]
+    
+
+
     def stop(self):
         self.running = False
         self.send_command("stop")
@@ -222,7 +235,11 @@ class Wrapper(AbstractWrapper):
 
     def _load_builtin_extensions(self):
         # load built-in extensions
-        pass
+        if self.config.use_webhook:
+            self.add_listener(DiscordHook(self))
+
+        if self.config.use_herobrine:
+            self.add_listener(Herobrine(self))
 
 
     def _update_server(self) -> bool:
@@ -454,8 +471,6 @@ def main():
     args = parser.parse_args()
 
     wrapper = Wrapper(args.directory)
-    #wrapper.add_listener(ListenerTester(wrapper))
-    wrapper.add_listener(DiscordHook(wrapper))
     wrapper.run()
 
 if __name__ == "__main__":
