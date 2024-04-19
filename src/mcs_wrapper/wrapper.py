@@ -12,6 +12,7 @@ from extensions.updater import get_last_version, download_server_jar, find_versi
 from extensions.listener import Listener, AbstractWrapper, Message
 from dataclasses import dataclass
 from utils.server_parser import player_message
+from utils.cyclic_list import CyclicList
 
 CONFIG_FILE = "wrapper.cfg"
 
@@ -61,6 +62,11 @@ class Wrapper(AbstractWrapper):
 
         self._listeners: list[Listener] = []
         self._next_message_id = 0
+
+        self.raw_messages = CyclicList(100)
+        self.messages = CyclicList(100)
+        self.player_messages = CyclicList(100)
+
 
     def add_listener(self, listener: Listener):
         self._listeners.append(listener)
@@ -122,13 +128,16 @@ class Wrapper(AbstractWrapper):
             line = None
 
         message = Message(self._next_message_id, line, line_raw)
+        self.raw_messages.append(message)
 
         # check if it was a player message
         if line is not None:
+            self.messages.append(message)
             pm = player_message(line)
             if pm:
                 message.author = pm[0]
                 message.user_message = pm[1]
+                self.player_messages.append(message)
 
         self._next_message_id += 1
 
