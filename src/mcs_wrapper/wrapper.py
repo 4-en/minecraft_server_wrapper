@@ -467,7 +467,7 @@ class ListenerTester(Listener):
 
 def main():
     parser = argparse.ArgumentParser(description="Wrapper for Minecraft server")
-    parser.add_argument("--directory", "-d", help="Server directory", default="default")
+    parser.add_argument("--directory", "-d" help="Server directory", default="default")
     args = parser.parse_args()
 
     wrapper = Wrapper(args.directory)
