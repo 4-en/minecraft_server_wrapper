@@ -91,6 +91,8 @@ class Logger(Listener):
             if death is not None:
                 self.log(message)
                 return
+            
+        print(message.content)
 
 
 

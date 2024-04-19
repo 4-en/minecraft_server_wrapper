@@ -142,6 +142,8 @@ class Wrapper(AbstractWrapper):
         return ["java", "-Xmx4096M", "-Xms1024M", "-jar", "server.jar", "nogui"]
     
     def _handle_line(self, line):
+        # remove [Not Secure]
+        line = line.replace("[Not Secure]", "")
         print(line)
 
         line_raw = line
@@ -452,7 +454,7 @@ def main():
     args = parser.parse_args()
 
     wrapper = Wrapper(args.directory)
-    wrapper.add_listener(ListenerTester(wrapper))
+    #wrapper.add_listener(ListenerTester(wrapper))
     wrapper.add_listener(DiscordHook(wrapper))
     wrapper.run()
 

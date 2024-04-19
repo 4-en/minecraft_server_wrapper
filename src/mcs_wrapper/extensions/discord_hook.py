@@ -41,19 +41,19 @@ class DiscordHook(Logger):
         self.fails = 0
 
     def send_server_start(self):
-        requests.post(self.config.webhook_url, json={"content": "Server started"})
+        requests.post(self.config.webhook_url, json={"content": "*Server started*"})
 
     def send_server_stop(self):
-        requests.post(self.config.webhook_url, json={"content": "Server stopped"})
+        requests.post(self.config.webhook_url, json={"content": "*Server stopped*"})
 
     def send_player_join(self, player: str):
-        requests.post(self.config.webhook_url, json={"content": f"{player} joined the server"})
+        requests.post(self.config.webhook_url, json={"content": f"**{player}** joined the server"})
 
     def send_player_leave(self, player: str):
-        requests.post(self.config.webhook_url, json={"content": f"{player} left the server"})
+        requests.post(self.config.webhook_url, json={"content": f"**{player}** left the server"})
 
     def send_player_message(self, player: str, message: str):
-        requests.post(self.config.webhook_url, json={"content": f"<{player}> {message}"})
+        requests.post(self.config.webhook_url, json={"content": f"<**{player}**> {message}"})
 
     def log(self, message: Message) -> None:
         if not self.enabled:
@@ -63,11 +63,11 @@ class DiscordHook(Logger):
                 self.send_server_start()
             elif is_server_stopped(message.content):
                 self.send_server_stop()
-            elif self.log_player_joins:
+            elif player_joined(message.content):
                 player = player_joined(message.content)
                 if player is not None:
                     self.send_player_join(player)
-            elif self.log_player_leaves:
+            elif player_left(message.content):
                 player = player_left(message.content)
                 if player is not None:
                     self.send_player_leave(player)
