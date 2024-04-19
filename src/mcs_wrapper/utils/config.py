@@ -58,7 +58,11 @@ class KVConfig:
 
         # try to convert value to value_type
         try:
-            value = value_type(value)
+            # special case for bool
+            if value_type == bool:
+                value = (value.lower() == "true" or value == "1")
+            else:
+                value = value_type(value)
         except ValueError:
             raise Exception(f"Failed to convert {value} to {value_type}")
         
@@ -111,7 +115,7 @@ class KVConfig:
 
         # check if file exists
         if not os.path.exists(path):
-            print(f"Config file {self.path} does not exist. Using default values.")
+            print(f"Config file {path} does not exist. Using default values.")
             return
 
         config = self._parse_file(path)

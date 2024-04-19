@@ -14,6 +14,7 @@ from extensions.listener import Listener, AbstractWrapper, Message
 from dataclasses import dataclass
 from utils.server_parser import player_message, is_server_ready
 from utils.cyclic_list import CyclicList
+from extensions.discord_hook import DiscordHook
 
 CONFIG_FILE = "wrapper.cfg"
 
@@ -97,6 +98,9 @@ class Wrapper(AbstractWrapper):
         self._server_ready_lock.acquire()
         # if we can acquire the lock, it means the server is ready
         self._server_ready_lock.release()
+
+    def get_current_directory(self):
+        return self.full_directory
 
     def _load_config(self):
         directory = self.directory  # directory of server
@@ -294,6 +298,11 @@ class Wrapper(AbstractWrapper):
             hours = seconds // 3600
             minutes = (seconds % 3600) // 60
             seconds = seconds % 60
+
+            hours = int(hours)
+            minutes = int(minutes)
+            seconds = int(seconds)
+
             if hours > 0:
                 return f"{hours}h {minutes}m {seconds}s"
             elif minutes > 0:
@@ -304,6 +313,7 @@ class Wrapper(AbstractWrapper):
         def scheduler_task():
             seconds_until_restart = interval * 3600
             self.wait_for_server_ready()
+            self.send_command(f"say Server will restart in {sec_to_hms_str(seconds_until_restart)}")
             while self._server_running and seconds_until_restart > 0:
                 next_warning = 0
                 warning_index = 0
@@ -443,6 +453,7 @@ def main():
 
     wrapper = Wrapper(args.directory)
     wrapper.add_listener(ListenerTester(wrapper))
+    wrapper.add_listener(DiscordHook(wrapper))
     wrapper.run()
 
 if __name__ == "__main__":

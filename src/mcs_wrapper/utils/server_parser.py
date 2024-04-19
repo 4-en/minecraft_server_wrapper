@@ -9,6 +9,12 @@ _SERVER_READY = re.compile(r"Done \(\d+\.\d+s\)! For help, type \"help\"")
 def is_server_ready(message: str) -> bool:
     return _SERVER_READY.match(message) is not None
 
+# check if the server has stopped
+_SERVER_STOPPED = re.compile(r"Stopping the server")
+def is_server_stopped(message: str) -> bool:
+    return _SERVER_STOPPED.match(message) is not None
+
+
 # Check if a player joined the server
 _PLAYER_JOINED = re.compile(r"(\w+) joined the game")
 def player_joined(message: str) -> str | None:
