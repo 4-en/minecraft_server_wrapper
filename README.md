@@ -11,6 +11,12 @@ This Minecraft Server Wrapper is a Python script designed to manage Minecraft se
 - **Herobrine Integration**: Adds a spooky Herobrine experience to your server.
 - **Configurable Settings**: Customizable settings through a configuration file.
 
+## TODOs
+
+- **Custom Commands**: Extension to create custom commands in python by listening to player chat.
+- **Ask Command**: Use LLM to ask Minecraft specific questions.
+- **Backups**: Automatically backup world.
+
 ## Requirements
 
 - `requests` for discord_hook extension
