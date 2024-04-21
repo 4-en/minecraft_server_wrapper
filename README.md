@@ -47,7 +47,7 @@ This Minecraft Server Wrapper is a Python script designed to manage Minecraft se
 
 1. Start the wrapper with the specified server directory:
    ```bash
-   python wrapper.py -d directory_name
+   mcsw -d directory_name
    ```
   Directory_name is a directory in the .mcs_wrapper directory
 
