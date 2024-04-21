@@ -1,5 +1,5 @@
-from extensions.listener import Listener, Message
-from utils.config import KVConfig
+from .listener import Listener, Message
+from ..utils.config import KVConfig
 import requests
 import openai
 import os

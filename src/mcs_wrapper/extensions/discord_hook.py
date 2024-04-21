@@ -1,8 +1,8 @@
-from utils.config import KVConfig
+from ..utils.config import KVConfig
 from dataclasses import dataclass
 from typing import List
-from extensions.listener import Listener, Message, Logger
-from utils.server_parser import is_server_ready, is_server_stopped, player_joined, player_left, player_message
+from .listener import Listener, Message, Logger
+from ..utils.server_parser import is_server_ready, is_server_stopped, player_joined, player_left, player_message
 import requests
 import os
 

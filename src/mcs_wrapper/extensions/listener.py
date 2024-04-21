@@ -1,7 +1,7 @@
 # base class that can listen to server messages
 
 from abc import ABC, abstractmethod
-from utils.server_parser import is_server_ready, player_joined, player_left, player_message, player_death, is_server_stopped
+from ..utils.server_parser import is_server_ready, player_joined, player_left, player_message, player_death, is_server_stopped
 
 
 class Message:

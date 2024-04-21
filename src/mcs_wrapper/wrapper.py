@@ -8,14 +8,14 @@ import time
 import re
 import datetime
 import argparse
-from utils.config import KVConfig, get_data_root
-from extensions.updater import get_last_version, download_server_jar, find_version
-from extensions.listener import Listener, AbstractWrapper, Message
+from .utils.config import KVConfig, get_data_root
+from .extensions.updater import get_last_version, download_server_jar, find_version
+from .extensions.listener import Listener, AbstractWrapper, Message
 from dataclasses import dataclass
-from utils.server_parser import player_message, is_server_ready
-from utils.cyclic_list import CyclicList
-from extensions.discord_hook import DiscordHook
-from extensions.herobrine import Herobrine
+from .utils.server_parser import player_message, is_server_ready
+from .utils.cyclic_list import CyclicList
+from .extensions.discord_hook import DiscordHook
+from .extensions.herobrine import Herobrine
 
 CONFIG_FILE = "wrapper.cfg"
 
@@ -467,7 +467,7 @@ class ListenerTester(Listener):
 
 def main():
     parser = argparse.ArgumentParser(description="Wrapper for Minecraft server")
-    parser.add_argument("--directory", "-d" help="Server directory", default="default")
+    parser.add_argument("--directory", "-d", help="Server directory", default="default")
     args = parser.parse_args()
 
     wrapper = Wrapper(args.directory)
