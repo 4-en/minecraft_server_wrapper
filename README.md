@@ -24,13 +24,17 @@ This Minecraft Server Wrapper is a Python script designed to manage Minecraft se
 
 ## Installation
 
-1. Clone the repository:
+1. Install Module:
    ```bash
-   git clone https://github.com/yourgithubusername/minecraft-server-wrapper.git
+   pip install git+https://github.com/yourgithubusername/minecraft-server-wrapper.git
    ```
-2. Navigate to the project directory:
+2. Run the Program:
    ```bash
-   cd minecraft-server-wrapper
+   mcs-wrapper
+   ```
+   or
+   ```bash
+   mcsw
    ```
 
 ## Configuration
